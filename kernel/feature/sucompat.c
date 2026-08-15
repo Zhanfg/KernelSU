@@ -156,10 +156,11 @@ do_orig_stat:
     return ksu_syscall_table[orig_nr](regs);
 }
 
-long ksu_handle_execve_sucompat(const char __user **filename_user, int orig_nr, struct pt_regs *regs)
+static long ksu_handle_execve_sucompat_common(const char __user **filename_user,
+                                              const char __user *const __user *argv_user, unsigned long envp,
+                                              int orig_nr, struct pt_regs *regs)
 {
     const char __user *fn;
-    const char __user *const __user *argv_user = (const char __user *const __user *)PT_REGS_PARM2(regs);
     struct ksu_sulog_pending_event *pending_sucompat = NULL;
     char path[sizeof(su_path) + 1];
     long ret, orig_regs[5];
@@ -216,8 +217,8 @@ long ksu_handle_execve_sucompat(const char __user **filename_user, int orig_nr, 
     orig_regs[3] = regs->__PT_SYSCALL_PARM4_REG;
     orig_regs[4] = regs->__PT_PARM5_REG;
     regs->__PT_PARM5_REG = AT_EMPTY_PATH;
-    regs->__PT_SYSCALL_PARM4_REG = regs->__PT_PARM3_REG;
-    regs->__PT_PARM3_REG = regs->__PT_PARM2_REG;
+    regs->__PT_SYSCALL_PARM4_REG = envp;
+    regs->__PT_PARM3_REG = (unsigned long)argv_user;
     regs->__PT_PARM2_REG = empty_user_path();
     regs->__PT_PARM1_REG = tmp_fd;
 
@@ -240,6 +241,18 @@ long ksu_handle_execve_sucompat(const char __user **filename_user, int orig_nr, 
 
 do_orig_execve:
     return ksu_syscall_table[orig_nr](regs);
+}
+
+long ksu_handle_execve_sucompat(const char __user **filename_user, int orig_nr, struct pt_regs *regs)
+{
+    return ksu_handle_execve_sucompat_common(filename_user, (const char __user *const __user *)PT_REGS_PARM2(regs),
+                                             PT_REGS_PARM3(regs), orig_nr, regs);
+}
+
+long ksu_handle_execveat_sucompat(const char __user **filename_user, int orig_nr, struct pt_regs *regs)
+{
+    return ksu_handle_execve_sucompat_common(filename_user, (const char __user *const __user *)PT_REGS_PARM3(regs),
+                                             PT_REGS_SYSCALL_PARM4(regs), orig_nr, regs);
 }
 
 // sucompat: permitted process can execute 'su' to gain root access.
